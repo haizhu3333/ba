@@ -1,0 +1,13 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "tsc && node dist/download.js"
+  },
+  "dependencies": {
+    "puppeteer": "^24.9.0",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/puppeteer": "^5.4.7"
+  }
+}
