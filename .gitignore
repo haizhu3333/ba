@@ -2,3 +2,5 @@ node_modules/
 dist/
 output/
 dist-newstyle/
+
+/dealgen/dds/
