@@ -21,7 +21,8 @@ executable ba-dealgen
     -- other-modules:
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0
+                    , fixed-vector
     hs-source-dirs:   src
-    extra-lib-dirs:   dds/lib
+    extra-lib-dirs:   .
     extra-libraries:  dds
     default-language: GHC2024
