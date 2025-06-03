@@ -1,14 +1,8 @@
-{-# LANGUAGE DerivingVia #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE StrictData #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
 module Main where
 
 import Control.Monad
 import Data.Bits
 import qualified Data.Vector.Fixed as F
-import qualified Data.Vector.Fixed.Storable as F
 import Foreign
 import Foreign.C
 import Lens.Micro
@@ -19,7 +13,11 @@ import Structs
 foreign import ccall unsafe "ErrorMessage"
     dds_ErrorMessage :: CInt -> Ptr CChar -> IO ()
 foreign import ccall unsafe "CalcAllTables"
-    dds_CalcAllTables :: Ptr DDTableDeals -> CInt -> Ptr CInt -> Ptr DDTablesRes -> Ptr ()
+    dds_CalcAllTables :: Ptr DDTableDeals   -- deals
+                      -> CInt               -- mode
+                      -> Ptr (Strains CInt) -- trumpFilter[5]
+                      -> Ptr DDTablesRes    -- resp
+                      -> Ptr ()             -- presp (unused)
                       -> IO CInt
 
 returnNoFault :: CInt
@@ -28,10 +26,10 @@ returnNoFault = 1
 calcAllTables :: [DDTableDeal] -> IO [DDTableResults]
 calcAllTables deals =
     with (DDTableDeals deals) $ \dealsPtr ->
-    flip F.unsafeWith trumpFilter $ \trumpFilterPtr ->
+    with trumpFilter $ \tfPtr ->
     alloca $ \resPtr -> do
         fillBytes resPtr 0 (sizeOf (undefined :: DDTablesRes))
-        retval <- dds_CalcAllTables dealsPtr modeNoPar trumpFilterPtr resPtr nullPtr
+        retval <- dds_CalcAllTables dealsPtr modeNoPar tfPtr resPtr nullPtr
         if retval == returnNoFault
         then getDDTableResultsList <$> peekPartial resPtr (length deals)
         else fail (errorMessage retval)
@@ -39,8 +37,8 @@ calcAllTables deals =
     modeNoPar :: CInt
     modeNoPar = -1
 
-    trumpFilter :: F.Vec 5 CInt
-    trumpFilter = F.fromList [0, 0, 0, 0, 0]
+    trumpFilter :: Strains CInt
+    trumpFilter = F.mk5 0 0 1 1 0
 
 errorMessage :: CInt -> String
 errorMessage x = unsafePerformIO $
@@ -48,12 +46,12 @@ errorMessage x = unsafePerformIO $
         dds_ErrorMessage x buf
         peekCString buf
 
-suitAt :: Char -> Lens' (Suits a) a
-suitAt 'S' f s = (\x -> s{spades   = x}) <$> f (spades s)
-suitAt 'H' f s = (\x -> s{hearts   = x}) <$> f (hearts s)
-suitAt 'D' f s = (\x -> s{diamonds = x}) <$> f (diamonds s)
-suitAt 'C' f s = (\x -> s{clubs    = x}) <$> f (clubs s)
-suitAt ch _ _ = error $ "Unknown suit " ++ show ch
+suitIndex :: Char -> Int
+suitIndex 'S' = 0
+suitIndex 'H' = 1
+suitIndex 'D' = 2
+suitIndex 'C' = 3
+suitIndex s = error $ "Unknown suit " ++ show s
 
 rankFlag :: Char -> PackedSuit
 rankFlag '2' = 0x0004
@@ -74,7 +72,7 @@ rankFlag ch = error $ "Unknown rank " ++ show ch
 makeHand :: [(Char, Char)] -> Hand
 makeHand = foldl' go (F.replicate 0)
   where
-    go hand (s, r) = hand & suitAt s %~ (.|. rankFlag r)
+    go hand (s, r) = hand & F.element (suitIndex s) %~ (.|. rankFlag r)
 
 strHand :: String -> String -> String -> String -> Hand
 strHand s h d c = makeHand $ concat [('S' ,) <$> s, ('H' ,) <$> h, ('D' ,) <$> d, ('C', ) <$> c]

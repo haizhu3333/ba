@@ -1,5 +1,5 @@
 cabal-version:      3.4
-name:               ba-results-parse
+name:               ba-parse
 version:            0.1.0.0
 -- synopsis:
 -- description:
@@ -15,7 +15,7 @@ build-type:         Simple
 common warnings
     ghc-options: -Wall
 
-executable ba-results-parse
+executable ba-parse
     import:           warnings
     main-is:          Main.hs
     -- other-modules:

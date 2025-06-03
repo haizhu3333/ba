@@ -24,7 +24,6 @@ executable ba-dealgen
                     , fixed-vector
                     , microlens
     hs-source-dirs:   src
-    extra-lib-dirs:   .
     extra-libraries:  dds
     default-language: GHC2024
     default-extensions: TemplateHaskell

@@ -1,7 +1,7 @@
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE FunctionalDependencies #-}
 module Structs where
 
 import Control.Monad
