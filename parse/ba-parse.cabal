@@ -18,7 +18,7 @@ common warnings
 executable ba-parse
     import:           warnings
     main-is:          Main.hs
-    -- other-modules:
+    other-modules:    JsonTypes
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0
                     , aeson
