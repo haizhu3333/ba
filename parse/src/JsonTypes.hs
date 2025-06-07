@@ -13,8 +13,10 @@ import Text.Printf (PrintfArg)
 data PairDirection = NS | EW
     deriving (Eq, Ord, Show)
 
-newtype Event = Event { sessions :: [Session] }
-    deriving Show
+data Event = Event
+    { startDate :: Text
+    , sessions :: [Session]
+    } deriving Show
 
 data Session = Session
     { number :: Int
@@ -68,7 +70,10 @@ newtype BoardNumber = BoardNumber Int
     deriving newtype (Eq, Ord, Show, FromJSON, PrintfArg)
 
 instance FromJSON Event where
-    parseJSON = withObject "Event" $ \v -> Event <$> v .: "sessions"
+    parseJSON = withObject "Event" $ \v -> do
+        startDate <- v .: "start_date"
+        sessions <- v .: "sessions"
+        pure Event{..}
 
 instance FromJSON Session where
     parseJSON = withObject "Session" $ \v -> do

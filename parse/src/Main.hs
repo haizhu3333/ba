@@ -9,11 +9,19 @@ module Main where
 import Control.Applicative (Alternative)
 import Control.Monad (forM, forM_)
 import Data.Aeson (Result(..), eitherDecodeFileStrict)
+import Data.Either (partitionEithers)
 import Data.List (sortBy)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Monoid (Alt(..))
 import Data.Ord (comparing, Down(..))
+import Data.Text (Text)
 import qualified Data.Text as T
+import System.Directory
 import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.FilePath
+import System.IO
 import Text.Printf (printf)
 
 import JsonTypes
@@ -31,11 +39,17 @@ allPlayers e = do
     pair <- section.pairs
     [pair.player1, pair.player2]
 
-printMPs :: Event -> IO ()
-printMPs e = forM_ (sortPlayers $ allPlayers e) $ \p ->
-    printf "%8.2f %s\n" p.totalMPs p.name
+getLatestMPs :: [Event] -> Map Text Float
+getLatestMPs es = M.fromListWith max $ do
+    e <- es
+    p <- allPlayers e
+    pure (p.name, p.totalMPs)
+
+printMPs :: [Event] -> IO ()
+printMPs es = forM_ (zip [1::Int ..] plist) $ \(i, (name, mps)) ->
+    printf "%3d. %8.2f %s\n" i mps name
   where
-    sortPlayers = sortBy $ comparing $ Down . (.totalMPs)
+    plist = sortBy (comparing (Down . snd)) (M.toList $ getLatestMPs es)
 
 data Played = Played
     { boards :: [Board]
@@ -66,7 +80,7 @@ hasPlayedBoard pairNo direction board =
 
 findPlayerInSection :: PlayerNumber -> Section -> Result Played
 findPlayerInSection target section =
-    fmap toPlayed $ mapFirst (findPlayerInPair target) section.pairs
+    toPlayed <$> mapFirst (findPlayerInPair target) section.pairs
   where
     toPlayed (pairNumber, direction) =
         let boards = filter (hasPlayedBoard pairNumber direction) section.boards
@@ -91,31 +105,62 @@ getPointsForPlayer target session = do
         points <- pointsOfBoard p.direction b.number session
         pure (b.number, points)
 
-summarizeSessions :: PlayerNumber -> Event -> IO ()
-summarizeSessions pn e =
-    forM_ e.sessions $ \session ->
-        case getPointsForPlayer pn session of
-            Error err -> putStrLn err
-            Success pts -> summarize session pts
+summarizeSessions :: PlayerNumber -> [Event] -> IO ()
+summarizeSessions pn es =
+    forM_ es $ \e -> do
+        forM_ e.sessions $ \session ->
+            case getPointsForPlayer pn session of
+                Error err -> putStrLn err
+                Success pts -> summarize e.startDate session pts
   where
-    summarize session pts =
+    summarize eventDate session pts =
         let total = sum $ map snd pts
             avg = fromIntegral total / fromIntegral (length pts) :: Double
-        in  printf "Session %d: Average %.2f HCP\n" session.number avg
+        in  printf "%s Session %d: Average %.2f HCP\n" eventDate session.number avg
 
-withEventFile :: FilePath -> (Event -> IO ()) -> IO ()
-withEventFile path f = do
+getFilePaths :: FilePath -> IO [FilePath]
+getFilePaths path = do
+    isFile <- doesFileExist path
+    if isFile
+    then do
+        if takeExtension path == ".json"
+        then pure [path]
+        else pure []
+    else do
+        isDir <- doesDirectoryExist path
+        if isDir
+        then do
+            children <- listDirectory path
+            concat <$> mapM (getFilePaths . (path </>)) children
+        else fail $ "Invalid path " ++ path
+
+labeledDecode :: FilePath -> IO (Either String Event)
+labeledDecode path = do
     decoded <- eitherDecodeFileStrict path
     case decoded of
-        Left err -> putStrLn err
-        Right e -> f e
+        Left err -> pure $ Left (path ++ ": " ++ err)
+        Right e -> pure $ Right e
+
+withEventFiles :: [FilePath] -> ([Event] -> IO ()) -> IO ()
+withEventFiles paths f = do
+    (errors, es) <- partitionEithers <$> mapM labeledDecode paths
+    forM_ errors (hPutStrLn stderr)
+    f $ sortBy (comparing (.startDate)) es
+
+usage :: IO ()
+usage = do
+    hPutStrLn stderr "Usage: ba-results-parse filepath [player#]"
+    exitFailure
 
 main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [jsonFile] -> withEventFile jsonFile printMPs
-        [jsonFile, playerNo] ->
-            withEventFile jsonFile $
-                summarizeSessions $ PlayerNumber $ T.pack playerNo
-        _ -> putStrLn "Usage: ba-results-parse filepath [player#]"
+        [] -> usage
+        jsonPath : args1 -> do
+            filePaths <- getFilePaths jsonPath
+            case args1 of
+                [] -> withEventFiles filePaths printMPs
+                [playerNo] -> withEventFiles filePaths $
+                    summarizeSessions (PlayerNumber $ T.pack playerNo)
+                _ -> usage

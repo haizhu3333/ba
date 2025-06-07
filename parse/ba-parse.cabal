@@ -22,6 +22,9 @@ executable ba-parse
     -- other-extensions:
     build-depends:    base ^>=4.21.0.0
                     , aeson
+                    , containers
+                    , directory
+                    , filepath
                     , text
     hs-source-dirs:   src
     default-language: GHC2024
