@@ -1,7 +1,3 @@
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 module JsonTypes where
 
 import Data.Aeson ((.:), FromJSON(..), Value(..), withObject, withText)
@@ -15,6 +11,8 @@ data PairDirection = NS | EW
 
 data Event = Event
     { startDate :: Text
+    , createdAt :: Text
+    , boardTop :: Float
     , sessions :: [Session]
     } deriving Show
 
@@ -60,6 +58,8 @@ data BoardResult = BoardResult
     { pairNumberNS :: PairNumber
     , pairNumberEW :: PairNumber
     , contract :: Text
+    , matchPointsNS :: Float
+    , matchPointsEW :: Float
     } deriving (Show)
 
 newtype PairNumber = PairNumber Text
@@ -72,6 +72,8 @@ newtype BoardNumber = BoardNumber Int
 instance FromJSON Event where
     parseJSON = withObject "Event" $ \v -> do
         startDate <- v .: "start_date"
+        createdAt <- v .: "created_at"
+        boardTop <- v .: "acbl_board_top" >>= parseTextFloat
         sessions <- v .: "sessions"
         pure Event{..}
 
@@ -123,10 +125,13 @@ instance FromJSON Player where
         totalMPs <- parseMPs mpObj
         pure Player{..}
 
-parseMPs :: Value -> Parser Float
-parseMPs (String t) = case T.rational t of
+parseTextFloat :: Text -> Parser Float
+parseTextFloat t = case T.rational t of
     Right (x, "") -> pure x
     _ -> fail $ "Cannot parse number: " ++ show t
+
+parseMPs :: Value -> Parser Float
+parseMPs (String t) = parseTextFloat t
 parseMPs Null = pure 0
 parseMPs v = unexpected v
 
@@ -141,4 +146,6 @@ instance FromJSON BoardResult where
         pairNumberNS <- v .: "ns_pair"
         pairNumberEW <- v .: "ew_pair"
         contract <- v .: "contract"
+        matchPointsNS <- v .: "ns_match_points" >>= parseTextFloat
+        matchPointsEW <- v .: "ew_match_points" >>= parseTextFloat
         pure BoardResult{..}

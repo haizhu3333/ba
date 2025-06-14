@@ -19,7 +19,15 @@ executable ba-parse
     import:           warnings
     main-is:          Main.hs
     other-modules:    JsonTypes
-    -- other-extensions:
+                    , PlayerHcpAverages
+                    , PlayersByMPs
+                    , Utils
+    default-extensions: DerivingVia
+                      , DuplicateRecordFields
+                      , NoFieldSelectors
+                      , OverloadedRecordDot
+                      , OverloadedStrings
+                      , RecordWildCards
     build-depends:    base ^>=4.21.0.0
                     , aeson
                     , containers
