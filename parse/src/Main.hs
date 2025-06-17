@@ -13,6 +13,7 @@ import System.FilePath
 import System.IO
 
 import JsonTypes
+import qualified HcpScoreCorr
 import qualified PlayerHcpAverages
 import qualified PlayersByMPs
 
@@ -39,26 +40,30 @@ labeledDecode path = do
         Left err -> pure $ Left (path ++ ": " ++ err)
         Right e -> pure $ Right e
 
-withEventFiles :: [FilePath] -> ([Event] -> IO ()) -> IO ()
-withEventFiles paths f = do
+withEventFiles :: FilePath -> ([Event] -> IO ()) -> IO ()
+withEventFiles path f = do
+    paths <- getFilePaths path
     (errors, es) <- partitionEithers <$> mapM labeledDecode paths
     forM_ errors (hPutStrLn stderr)
     f $ sortBy (comparing (.createdAt)) es
 
 usage :: IO ()
 usage = do
-    hPutStrLn stderr "Usage: ba-results-parse filepath [player#]"
+    hPutStrLn stderr $ unlines
+        [ "Usage: "
+        , "  ba-parse players <filepath>"
+        , "  ba-parse hcp-avg <filepath> <player#>"
+        , "  ba-parse hcp-corr <filepath> <player#>"
+        ]
     exitFailure
 
 main :: IO ()
 main = do
     args <- getArgs
     case args of
-        [] -> usage
-        jsonPath : args1 -> do
-            filePaths <- getFilePaths jsonPath
-            case args1 of
-                [] -> withEventFiles filePaths PlayersByMPs.processEvents
-                [playerNo] -> withEventFiles filePaths $
-                    PlayerHcpAverages.processEvents (PlayerNumber $ T.pack playerNo)
-                _ -> usage
+        ["players", path] -> withEventFiles path PlayersByMPs.processEvents
+        ["hcp-avg", path, pnum] -> withEventFiles path $ PlayerHcpAverages.processEvents (toPN pnum)
+        ["hcp-corr", path, pnum] -> withEventFiles path $ HcpScoreCorr.processEvents (toPN pnum)
+        _ -> usage
+  where
+    toPN = PlayerNumber . T.pack

@@ -19,6 +19,7 @@ executable ba-parse
     import:           warnings
     main-is:          Main.hs
     other-modules:    JsonTypes
+                    , HcpScoreCorr
                     , PlayerHcpAverages
                     , PlayersByMPs
                     , Utils
@@ -28,6 +29,7 @@ executable ba-parse
                       , OverloadedRecordDot
                       , OverloadedStrings
                       , RecordWildCards
+                      , StrictData
     build-depends:    base ^>=4.21.0.0
                     , aeson
                     , containers
