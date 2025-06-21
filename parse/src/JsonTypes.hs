@@ -10,9 +10,10 @@ data PairDirection = NS | EW
     deriving (Eq, Ord, Show)
 
 data Event = Event
-    { startDate :: Text
+    { objectId :: Int
+    , startDate :: Text
     , createdAt :: Text
-    , boardTop :: Float
+    , boardTop :: Double
     , sessions :: [Session]
     } deriving Show
 
@@ -46,7 +47,7 @@ data Pair = Pair
 data Player = Player
     { name :: Text
     , number :: PlayerNumber
-    , totalMPs :: Float
+    , totalMPs :: Maybe Double
     } deriving (Show)
 
 data Board = Board
@@ -55,11 +56,12 @@ data Board = Board
     } deriving (Show)
 
 data BoardResult = BoardResult
-    { pairNumberNS :: PairNumber
+    { tableNumber :: Int
+    , pairNumberNS :: PairNumber
     , pairNumberEW :: PairNumber
     , contract :: Text
-    , matchPointsNS :: Float
-    , matchPointsEW :: Float
+    , matchPointsNS :: Double
+    , matchPointsEW :: Double
     } deriving (Show)
 
 newtype PairNumber = PairNumber Text
@@ -71,9 +73,10 @@ newtype BoardNumber = BoardNumber Int
 
 instance FromJSON Event where
     parseJSON = withObject "Event" $ \v -> do
+        objectId <- v .: "id"
         startDate <- v .: "start_date"
         createdAt <- v .: "created_at"
-        boardTop <- v .: "acbl_board_top" >>= parseTextFloat
+        boardTop <- v .: "acbl_board_top" >>= parseTextDouble
         sessions <- v .: "sessions"
         pure Event{..}
 
@@ -125,14 +128,14 @@ instance FromJSON Player where
         totalMPs <- parseMPs mpObj
         pure Player{..}
 
-parseTextFloat :: Text -> Parser Float
-parseTextFloat t = case T.rational t of
+parseTextDouble :: Text -> Parser Double
+parseTextDouble t = case T.rational t of
     Right (x, "") -> pure x
     _ -> fail $ "Cannot parse number: " ++ show t
 
-parseMPs :: Value -> Parser Float
-parseMPs (String t) = parseTextFloat t
-parseMPs Null = pure 0
+parseMPs :: Value -> Parser (Maybe Double)
+parseMPs (String t) = Just <$> parseTextDouble t
+parseMPs Null = pure Nothing
 parseMPs v = unexpected v
 
 instance FromJSON Board where
@@ -143,9 +146,10 @@ instance FromJSON Board where
 
 instance FromJSON BoardResult where
     parseJSON = withObject "BoardResult" $ \v -> do
+        tableNumber <- v .: "table_number"
         pairNumberNS <- v .: "ns_pair"
         pairNumberEW <- v .: "ew_pair"
         contract <- v .: "contract"
-        matchPointsNS <- v .: "ns_match_points" >>= parseTextFloat
-        matchPointsEW <- v .: "ew_match_points" >>= parseTextFloat
+        matchPointsNS <- v .: "ns_match_points" >>= parseTextDouble
+        matchPointsEW <- v .: "ew_match_points" >>= parseTextDouble
         pure BoardResult{..}
