@@ -1,7 +1,8 @@
 {
   "type": "module",
   "scripts": {
-    "start": "tsc && node dist/download.js"
+    "build": "tsc -p downloader/tsconfig.json",
+    "download": "node dist-npm/download.js"
   },
   "dependencies": {
     "puppeteer": "^24.9.0",

@@ -36,5 +36,5 @@ executable ba-parse
                     , text
                     , direct-sqlite
                     , resourcet
-    hs-source-dirs:   src
+    hs-source-dirs:   .
     default-language: GHC2024

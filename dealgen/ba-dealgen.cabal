@@ -23,7 +23,7 @@ executable ba-dealgen
     build-depends:    base ^>=4.21.0.0
                     , fixed-vector
                     , microlens
-    hs-source-dirs:   src
+    hs-source-dirs:   .
     extra-libraries:  dds
     default-language: GHC2024
     default-extensions: TemplateHaskell

@@ -1,5 +1,5 @@
-node_modules/
-dist/
-output/
-dist-newstyle/
+/dist-newstyle/
+/dist-npm/
+/node_modules/
+/output/
 /cabal.project.local

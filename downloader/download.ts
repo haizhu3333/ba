@@ -64,9 +64,10 @@ async function main() {
     const resultsList = await getList(browser, acblId, clubFilter);
     console.log(`Saving ${resultsList.length} results`);
     await fs.mkdir(outputDir, {recursive: true});
-    const saves = resultsList.map(({date, link}) =>
-        saveData(browser, link, path.join(outputDir, `${date}.json`)));
-    await Promise.all(saves);
+    for (const {date, link} of resultsList) {
+        await saveData(browser, link, path.join(outputDir, `${date}.json`));
+        console.log(`Saved ${date}.json`);
+    }
     await browser.close();
     console.log('Browser closed');
 }
