@@ -1,12 +1,23 @@
-module Main where
+module Main (main) where
 
-import Control.Monad
-import Data.Bits
+import Control.Monad (replicateM)
+import Data.Bits (Bits(..))
+import qualified Data.ByteString.Lazy as BL
+import qualified Data.Csv as CSV
+import Data.List (sortBy)
+import Data.Ord (Down(..), comparing)
 import qualified Data.Vector.Fixed as F
-import Foreign
-import Foreign.C
-import Lens.Micro
+import Foreign (Ptr, sizeOf, alloca, allocaBytes, fillBytes, with, nullPtr)
+import Foreign.C (CChar, CInt(..), peekCString)
+import Lens.Micro ((&), (%~), (^.), Lens')
+import Lens.Micro.Extras (view)
+import System.Environment (getArgs)
+import System.Exit (exitFailure)
+import System.IO (stderr, hPutStrLn)
 import System.IO.Unsafe (unsafePerformIO)
+import System.Random.Stateful (StatefulGen, initStdGen, newIOGenM, uniformShuffleListM)
+import Text.Printf (printf)
+import Text.Read (readMaybe)
 
 import Structs
 
@@ -31,14 +42,14 @@ calcAllTables deals =
         fillBytes resPtr 0 (sizeOf (undefined :: DDTablesRes))
         retval <- dds_CalcAllTables dealsPtr modeNoPar tfPtr resPtr nullPtr
         if retval == returnNoFault
-        then getDDTableResultsList <$> peekPartial resPtr (length deals)
+        then view ddResults <$> peekPartial resPtr (length deals)
         else fail (errorMessage retval)
   where
     modeNoPar :: CInt
     modeNoPar = -1
 
     trumpFilter :: Strains CInt
-    trumpFilter = F.mk5 0 0 1 1 0
+    trumpFilter = F.mk5 1 1 1 1 0
 
 errorMessage :: CInt -> String
 errorMessage x = unsafePerformIO $
@@ -69,33 +80,63 @@ rankFlag 'K' = 0x2000
 rankFlag 'A' = 0x4000
 rankFlag ch = error $ "Unknown rank " ++ show ch
 
-makeHand :: [(Char, Char)] -> Hand
+data Card = Card Char Char deriving (Eq, Ord)
+
+instance Show Card where
+    show (Card s r) = [s, r]
+
+makeHand :: [Card] -> Hand
 makeHand = foldl' go (F.replicate 0)
   where
-    go hand (s, r) = hand & F.element (suitIndex s) %~ (.|. rankFlag r)
+    go hand (Card s r) = hand & F.element (suitIndex s) %~ (.|. rankFlag r)
 
-strHand :: String -> String -> String -> String -> Hand
-strHand s h d c = makeHand $ concat [('S' ,) <$> s, ('H' ,) <$> h, ('D' ,) <$> d, ('C', ) <$> c]
+randomDeal :: StatefulGen g m => g -> m (Hands [Card], DDTableDeal)
+randomDeal rng = do
+    deck0 <- uniformShuffleListM deck rng
+    let (n, deck1) = splitAt 13 deck0
+        (e, deck2) = splitAt 13 deck1
+        (s, w) = splitAt 13 deck2
+        cards = Hands n e s w
+        deal = DDTableDeal $ Hands (makeHand n) (makeHand e) (makeHand s) (makeHand w)
+    pure (cards, deal)
+  where
+    deck = Card <$> "SHDC" <*> "23456789TJQKA"
 
-deal1, deal2, deal3 :: DDTableDeal
-deal1 = DDTableDeal $ Hands
-    (strHand "QJ6" "K652" "J85" "T98")
-    (strHand "873" "J97" "AT764" "Q4")
-    (strHand "K5" "T83" "KQ9" "A7652")
-    (strHand "AT942" "AQ4" "32" "KJ3")
-deal2 = DDTableDeal $ Hands
-    (strHand "AK96" "KQ8" "A98" "K63")
-    (strHand "QJT5432" "T" "6" "QJ82")
-    (strHand "" "J97543" "K7532" "94")
-    (strHand "87" "A62" "QJT4" "AT75")
-deal3 = DDTableDeal $ Hands
-    (strHand "73" "QJT" "AQ54" "T752")
-    (strHand "QT6" "876" "KJ9" "AQ84")
-    (strHand "5" "A95432" "7632" "K6")
-    (strHand "AKJ9842" "K" "T8" "J93")
+randomDealBatch :: StatefulGen g IO => Int -> g -> IO [(Hands [Card], Hands Int)]
+randomDealBatch n rng = do
+    (cards, deals) <- unzip <$> replicateM n (randomDeal rng)
+    printf "Solving %d deals\n" n
+    resList <- calcAllTables deals
+    let ntRes = [ fromIntegral <$> r ^. notrump | DDTableResults r <- resList ]
+    pure $ zip cards ntRes
+
+sortBySuit :: [Card] -> Suits String
+sortBySuit cards = Suits (get 'S') (get 'H') (get 'D') (get 'C')
+  where
+    get suit = sortBy (comparing (Down . rankFlag)) [ r | Card s r <- cards, s == suit ]
+
+toRecords :: Hands [Card] -> Hands Int -> [CSV.Record]
+toRecords cards tricks = [toR north, toR east, toR south, toR west]
+  where
+    toR :: (forall a. Lens' (Hands a) a) -> CSV.Record
+    toR dir =
+        let suits = sortBySuit (cards ^. dir)
+        in  CSV.toRecord
+                (suits ^. spades, suits ^. hearts, suits ^. diamonds, suits ^. clubs, tricks ^. dir)
+
+generateCsv :: Int -> FilePath -> IO ()
+generateCsv nBatch outputPath = do
+    rng <- initStdGen >>= newIOGenM
+    batches <- replicateM nBatch (randomDealBatch 200 rng)
+    let records = concatMap (uncurry toRecords) (concat batches)
+    BL.writeFile outputPath $ CSV.encode records
 
 main :: IO ()
 main = do
-    res <- calcAllTables [deal1, deal2, deal3]
-    print (length res)
-    forM_ res print
+    args <- getArgs
+    case args of
+        [nBatchStr, outputPath] | Just nBatch <- readMaybe nBatchStr ->
+            generateCsv nBatch outputPath
+        _ -> do
+            hPutStrLn stderr "Usage: ba-dealgen <num batches> <output path>"
+            exitFailure

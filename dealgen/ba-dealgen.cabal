@@ -19,10 +19,17 @@ executable ba-dealgen
     import:           warnings
     main-is:          Main.hs
     other-modules:    Structs
-    -- other-extensions:
+    default-extensions: DerivingVia
+                      , NoFieldSelectors
+                      , RecordWildCards
+                      , TypeFamilies
     build-depends:    base ^>=4.21.0.0
+                    , bytestring
+                    , cassava
                     , fixed-vector
                     , microlens
+                    , microlens-th
+                    , random
     hs-source-dirs:   .
     extra-libraries:  dds
     default-language: GHC2024
