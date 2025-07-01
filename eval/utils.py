@@ -21,16 +21,3 @@ def compute_hcp(df: pd.DataFrame) -> pd.DataFrame:
                    for suit in 'SHDC'
                    for rank, value in zip('AKQJ', [4, 3, 2, 1]))
     })
-
-if __name__ == '__main__':
-    cards, tricks = load_data(DATA_PATH)
-    hcp = compute_hcp(cards)
-    model = LinearRegression()
-    model.fit(hcp, tricks)
-    print(f'{model.coef_=}, {model.intercept_=}')
-
-    cards, tricks = load_data(TEST_PATH)
-    hcp = compute_hcp(cards)
-    preds = model.predict(hcp)
-    gt = tricks.values
-    print(preds.shape)

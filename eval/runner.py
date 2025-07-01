@@ -4,34 +4,15 @@ from typing import Optional
 import time
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-from tqdm import tqdm
 
-from load import load_data, DATA_PATH, TEST_PATH
+import models
+import utils
 
 def load_dataset(device: str, csv_path: Path) -> TensorDataset:
-    cards, tricks = load_data(csv_path)
+    cards, tricks = utils.load_data(csv_path)
     return TensorDataset(
         torch.tensor(cards.values, dtype=torch.float, device=device),
         torch.tensor(tricks.values, dtype=torch.float, device=device))
-
-
-class Model(torch.nn.Module):
-
-    def __init__(self, size: int):
-        super().__init__()
-        self.net = torch.nn.Sequential(
-            torch.nn.Linear(52, size),
-            torch.nn.ReLU(),
-            torch.nn.Linear(size, 1),
-        )
-        self.loss = torch.nn.MSELoss(reduction='sum')
-
-    def forward(self, inputs: torch.Tensor, targets: Optional[torch.Tensor]) -> torch.Tensor:
-        outputs = self.net(inputs).squeeze(dim=1)
-        if targets is None:
-            return outputs
-        return self.loss(outputs, targets)
-
 
 @dataclass
 class Trainer:
@@ -66,15 +47,15 @@ class Trainer:
 
     def training_loop(self, epochs: int):
         start_time = time.time()
-        for epoch in tqdm(range(epochs)):
+        for epoch in range(epochs):
             train_loss = self.train_epoch()
             test_loss = self.test_epoch()
             lrs = ', '.join(f'{lr:.3e}' for lr in self.lr_scheduler.get_last_lr())
             self.lr_scheduler.step()
             end_time = time.time()
             duration = end_time - start_time
-            tqdm.write(f'Epoch {epoch:3} | {duration:6.3f}s | lr {lrs} | '
-                       f'loss {train_loss:9.4f} {test_loss:9.4f}')
+            print(f'Epoch {epoch:3} | {duration:6.3f}s | lr {lrs} | '
+                  f'loss {train_loss:9.4f} {test_loss:9.4f}')
             start_time = end_time
 
 
@@ -90,10 +71,12 @@ class Config:
 def main(config: Config):
     device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     print(f'Using device: {device}')
-    train_loader = DataLoader(load_dataset(device, DATA_PATH), config.batch_size, shuffle=True)
-    test_loader = DataLoader(load_dataset(device, TEST_PATH), config.test_batch_size)
+    train_loader = DataLoader(
+        load_dataset(device, utils.DATA_PATH), config.batch_size, shuffle=True)
+    test_loader = DataLoader(
+        load_dataset(device, utils.TEST_PATH), config.test_batch_size, shuffle=False)
     print(f'Data loaded')
-    model = Model(config.model_size)
+    model = models.SimpleModel(config.model_size).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), config.initial_lr)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, [])
     trainer = Trainer(train_loader, test_loader, model, optimizer, lr_scheduler)
